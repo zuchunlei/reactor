@@ -27,6 +27,7 @@ public class ServerBuilder {
     static class Server {
         private static final String DEFAULT_HOST = "localhost";
         private static final int DEFAULT_PORT = 6666;
+        private static final long DEFAULT_TIMEOUT = 1000;
         private volatile boolean running = false;
         private boolean init = false;
         private IoHandler handler;
@@ -35,6 +36,7 @@ public class ServerBuilder {
         private Poller[] pollers;
         private String host = DEFAULT_HOST;
         private int port = DEFAULT_PORT;
+        private long timeout = DEFAULT_TIMEOUT;
 
         public Server(IoHandler handler) {
             this.handler = handler;
@@ -47,6 +49,11 @@ public class ServerBuilder {
 
         public Server port(int port) {
             this.port = port;
+            return this;
+        }
+
+        public Server timeout(long timeout){
+            this.timeout = timeout;
             return this;
         }
 
@@ -81,6 +88,7 @@ public class ServerBuilder {
 
         public Server shutdown() {
             this.running = false;
+            this.acceptor.wakeup();
             return this;
         }
 
@@ -149,7 +157,7 @@ public class ServerBuilder {
                 try {
                     this.selector = Selector.open();
                     while (running) {
-                        int selected = selector.select(1000);
+                        int selected = selector.select(timeout);
                         if (selected > 0) {
                             processEvents(selector.selectedKeys());
                         }
@@ -161,7 +169,7 @@ public class ServerBuilder {
 
             }
 
-            public void processEvents(final Collection<SelectionKey> selectedKeys) {
+            private void processEvents(final Collection<SelectionKey> selectedKeys) {
                 for (SelectionKey key : selectedKeys) {
                     processEvent(key);
                 }
@@ -183,7 +191,7 @@ public class ServerBuilder {
                 }
             }
 
-            public void registerChannel(SocketChannel channel) {
+            private void registerChannel(SocketChannel channel) {
                 final SocketChannel sc = channel;
                 final Poller poller = this;
                 queue.add(new Runnable() {
@@ -200,11 +208,16 @@ public class ServerBuilder {
                 });
             }
 
-            public void queueEvents() {
+            private void queueEvents() {
+                boolean wakeup = false;
                 for (Iterator<Runnable> it = queue.iterator(); it.hasNext();) {
                     Runnable task = it.next();
                     it.remove();
                     task.run();
+                    wakeup=true;
+                }
+                if(wakeup){
+                    selector.wakeup();
                 }
             }
         }
