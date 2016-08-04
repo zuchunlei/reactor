@@ -1,2 +1,3 @@
 # reactor
-java nio reactor practice
+java nio reactor practice.
+reference https://github.com/ribeirux/nioreactor.git
